@@ -863,7 +863,7 @@ def kpi():
             Sample.status == SampleStatus.REJECTED
         ).count()
 
-        # Turnaround: average days from date_registered to certified_at
+        # Turnaround: average working days from date_received to certified_at
         avg_tat = None
         certified_samples = base_q.filter(
             Sample.status.in_([SampleStatus.CERTIFIED, SampleStatus.COMPLETED]),
@@ -873,8 +873,8 @@ def kpi():
             non_working = fetch_non_working_days(start, end)
             days_list = []
             for s in certified_samples:
-                if s.certified_at and s.date_registered:
-                    delta_days = calculate_working_days(s.date_registered, s.certified_at, non_working)
+                if s.certified_at and s.date_received:
+                    delta_days = calculate_working_days(s.date_received, s.certified_at, non_working)
                     days_list.append(delta_days) if delta_days is not None else None
             avg_tat = round(sum(days_list) / len(days_list), 1) if days_list else None
 
@@ -949,9 +949,9 @@ def _auto_actuals(year, quarter):
             q = q.filter(Sample.alcohol_type == alcohol_type_filter)
         samples = q.all()
         days = [
-            calculate_working_days(s.date_registered, s.certified_at, non_working)
+            calculate_working_days(s.date_received, s.certified_at, non_working)
             for s in samples
-            if s.certified_at and s.date_registered
+            if s.certified_at and s.date_received
         ]
         days = [d for d in days if d is not None]
         return round(sum(days) / len(days), 1) if days else None
@@ -1425,8 +1425,8 @@ def pharma_report():
     # Per-sample TAT (Feature 2)
     sample_tat = {}
     for s in samples:
-        if s.certified_at and s.date_registered and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED):
-            sample_tat[s.id] = calculate_working_days(s.date_registered, s.certified_at, non_working)
+        if s.certified_at and s.date_received and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED):
+            sample_tat[s.id] = calculate_working_days(s.date_received, s.certified_at, non_working)
         else:
             sample_tat[s.id] = None
 
@@ -1537,9 +1537,9 @@ def pharma_report_download():
     ])
     for s in samples:
         tat = ''
-        if (s.certified_at and s.date_registered
+        if (s.certified_at and s.date_received
                 and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
-            tat = calculate_working_days(s.date_registered, s.certified_at, non_working)
+            tat = calculate_working_days(s.date_received, s.certified_at, non_working)
         writer.writerow([
             s.lab_number,
             s.sample_name,
@@ -1629,8 +1629,8 @@ def milk_report():
 
     sample_tat = {}
     for s in samples:
-        if s.certified_at and s.date_registered and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED):
-            sample_tat[s.id] = calculate_working_days(s.date_registered, s.certified_at, non_working)
+        if s.certified_at and s.date_received and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED):
+            sample_tat[s.id] = calculate_working_days(s.date_received, s.certified_at, non_working)
         else:
             sample_tat[s.id] = None
 
@@ -1730,9 +1730,9 @@ def milk_report_download():
     ])
     for s in samples:
         tat = ''
-        if (s.certified_at and s.date_registered
+        if (s.certified_at and s.date_received
                 and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
-            tat = calculate_working_days(s.date_registered, s.certified_at, non_working)
+            tat = calculate_working_days(s.date_received, s.certified_at, non_working)
         milk_type_label = ''
         if s.milk_type == 'R':
             milk_type_label = 'Raw Milk'
@@ -1831,8 +1831,8 @@ def toxicology_report():
 
     sample_tat = {}
     for s in samples:
-        if s.certified_at and s.date_registered and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED):
-            sample_tat[s.id] = calculate_working_days(s.date_registered, s.certified_at, non_working)
+        if s.certified_at and s.date_received and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED):
+            sample_tat[s.id] = calculate_working_days(s.date_received, s.certified_at, non_working)
         else:
             sample_tat[s.id] = None
 
@@ -1939,9 +1939,9 @@ def toxicology_report_download():
     ])
     for s in samples:
         tat = ''
-        if (s.certified_at and s.date_registered
+        if (s.certified_at and s.date_received
                 and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
-            tat = calculate_working_days(s.date_registered, s.certified_at, non_working) or ''
+            tat = calculate_working_days(s.date_received, s.certified_at, non_working) or ''
         writer.writerow([
             s.lab_number,
             s.sample_name,
@@ -2029,8 +2029,8 @@ def alcohol_report():
 
     sample_tat = {}
     for s in samples:
-        if s.certified_at and s.date_registered and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED):
-            sample_tat[s.id] = calculate_working_days(s.date_registered, s.certified_at, non_working)
+        if s.certified_at and s.date_received and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED):
+            sample_tat[s.id] = calculate_working_days(s.date_received, s.certified_at, non_working)
         else:
             sample_tat[s.id] = None
 
@@ -2053,10 +2053,10 @@ def alcohol_report():
     ]
     for alc_type in alcohol_type_labels:
         type_days = [
-            calculate_working_days(s.date_registered, s.certified_at, non_working)
+            calculate_working_days(s.date_received, s.certified_at, non_working)
             for s in samples
             if s.alcohol_type == alc_type
-            and s.certified_at and s.date_registered
+            and s.certified_at and s.date_received
             and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
         ]
         type_days = [d for d in type_days if d is not None]
@@ -2150,9 +2150,9 @@ def alcohol_report_download():
     ])
     for s in samples:
         tat = ''
-        if (s.certified_at and s.date_registered
+        if (s.certified_at and s.date_received
                 and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
-            tat = calculate_working_days(s.date_registered, s.certified_at, non_working) or ''
+            tat = calculate_working_days(s.date_received, s.certified_at, non_working) or ''
         writer.writerow([
             s.lab_number,
             s.sample_name,
@@ -2228,9 +2228,9 @@ def kpi_toxicology():
         if cert_samples:
             non_working = fetch_non_working_days(start, end)
             days_list = [
-                calculate_working_days(s.date_registered, s.certified_at, non_working)
+                calculate_working_days(s.date_received, s.certified_at, non_working)
                 for s in cert_samples
-                if s.certified_at and s.date_registered
+                if s.certified_at and s.date_received
             ]
             days_list = [d for d in days_list if d is not None]
             avg_tat = round(sum(days_list) / len(days_list), 1) if days_list else None
@@ -2321,8 +2321,8 @@ def all_branches_report():
 
     sample_tat = {}
     for s in samples:
-        if s.certified_at and s.date_registered and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED):
-            sample_tat[s.id] = calculate_working_days(s.date_registered, s.certified_at, non_working)
+        if s.certified_at and s.date_received and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED):
+            sample_tat[s.id] = calculate_working_days(s.date_received, s.certified_at, non_working)
         else:
             sample_tat[s.id] = None
 
@@ -2417,9 +2417,9 @@ def all_branches_report_download():
     ])
     for s in samples:
         tat = ''
-        if (s.certified_at and s.date_registered
+        if (s.certified_at and s.date_received
                 and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
-            tat = calculate_working_days(s.date_registered, s.certified_at, non_working) or ''
+            tat = calculate_working_days(s.date_received, s.certified_at, non_working) or ''
         writer.writerow([
             s.lab_number,
             s.sample_name,
