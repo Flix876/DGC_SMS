@@ -4,6 +4,7 @@ from datetime import date, datetime, timezone
 from app import db
 from app.models import (
     Sample, SampleAssignment, User, Role, Branch, SampleStatus, KpiTarget,
+    NonWorkingDay,
     KPI_METRICS, AUTO_ACTUAL_KEYS,
 )
 from tests.conftest import _create_user, _login
@@ -178,6 +179,28 @@ def test_kpi_report_variance_computed(app, client):
     assert b'-4' in resp.data
 
 
+def test_kpi_auto_actuals_tat_uses_date_registered(app):
+    """Auto KPI TAT should be measured from registration, not received date."""
+    from app.main.routes import _auto_actuals
+    with app.app_context():
+        admin = _create_user(Role.ADMIN, username='admin_tat_kpi')
+        sample = Sample(
+            lab_number='PH-TAT-KPI-001',
+            sample_name='TAT KPI Baseline',
+            sample_type=Branch.PHARMACEUTICAL,
+            date_received=date(2026, 3, 1),
+            date_registered=datetime(2026, 4, 2, tzinfo=timezone.utc),
+            certified_at=datetime(2026, 4, 4, tzinfo=timezone.utc),
+            uploaded_by=admin.id,
+            status=SampleStatus.CERTIFIED,
+        )
+        db.session.add(sample)
+        db.session.commit()
+
+        actuals = _auto_actuals(2026, 1)
+        assert actuals['avg_days_pharma_coa'] == 1.0
+
+
 # ---------------------------------------------------------------------------
 # Pharmaceutical Report
 # ---------------------------------------------------------------------------
@@ -241,6 +264,41 @@ def test_pharma_report_download_respects_status_filter(app, client):
     assert resp.status_code == 200
     assert b'PH-CERT' in resp.data
     assert b'PH-INPROG' not in resp.data
+
+
+def test_pharma_report_download_tat_uses_full_sample_date_range(app, client):
+    """TAT export should include holidays across the full measured interval."""
+    import csv
+    _setup_admin(app)
+    with app.app_context():
+        admin = User.query.filter_by(username='admin').first()
+        sample = Sample(
+            lab_number='PH-HOL-001',
+            sample_name='Range Holiday Check',
+            sample_type=Branch.PHARMACEUTICAL,
+            date_received=date(2026, 3, 28),
+            date_registered=datetime(2026, 3, 28, tzinfo=timezone.utc),
+            certified_at=datetime(2026, 4, 3, tzinfo=timezone.utc),
+            uploaded_by=admin.id,
+            status=SampleStatus.CERTIFIED,
+        )
+        holiday = NonWorkingDay(
+            date=date(2026, 3, 31),
+            description='Range test holiday',
+            day_type='holiday',
+            created_by=admin.id,
+        )
+        db.session.add(sample)
+        db.session.add(holiday)
+        db.session.commit()
+
+    _login(client, 'admin')
+    resp = client.get('/reports/pharma/download?year=2026&quarter=1')
+    assert resp.status_code == 200
+
+    rows = list(csv.reader(resp.data.decode('utf-8').splitlines()))
+    row = next(r for r in rows if r and r[0] == 'PH-HOL-001')
+    assert row[10] == '4'
 
 
 def test_pharma_report_filter_formulation_api_source(app, client):
