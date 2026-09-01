@@ -230,6 +230,39 @@ def test_kpi_auto_actuals_tat_uses_full_sample_date_range(app):
         assert actuals['avg_days_pharma_coa'] == 2.0
 
 
+def test_kpi_auto_actuals_only_prefetches_tat_date_range(app, monkeypatch):
+    """Auto KPI TAT should avoid an unused quarter-wide non-working prefetch."""
+    from app.main import routes
+
+    with app.app_context():
+        admin = _create_user(Role.ADMIN, username='admin_tat_prefetch')
+        sample = Sample(
+            lab_number='PH-TAT-PREFETCH-001',
+            sample_name='TAT Prefetch Check',
+            sample_type=Branch.PHARMACEUTICAL,
+            date_received=date(2026, 6, 30),
+            date_registered=datetime(2026, 6, 30, tzinfo=timezone.utc),
+            certified_at=datetime(2026, 7, 3, tzinfo=timezone.utc),
+            uploaded_by=admin.id,
+            status=SampleStatus.CERTIFIED,
+        )
+        db.session.add(sample)
+        db.session.commit()
+
+        calls = []
+
+        def fake_fetch_non_working_days(start_date, end_date):
+            calls.append((start_date, end_date))
+            return set()
+
+        monkeypatch.setattr(routes, 'fetch_non_working_days', fake_fetch_non_working_days)
+
+        actuals = routes._auto_actuals(2026, 1)
+
+        assert actuals['avg_days_pharma_coa'] == 3.0
+        assert calls == [(date(2026, 6, 30), date(2026, 7, 3))]
+
+
 # ---------------------------------------------------------------------------
 # Pharmaceutical Report
 # ---------------------------------------------------------------------------
