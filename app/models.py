@@ -1100,7 +1100,8 @@ def calculate_working_days(start_date, end_date, non_working_dates=None):
         non_working_dates = fetch_non_working_days(start_date, end_date)
 
     count = 0
-    current = start_date
+    # TAT starts the day *after* the start date (e.g. day after registration).
+    current = start_date + timedelta(days=1)
     while current <= end_date:
         # Exclude weekends (Mon-Fri are 0-4; Sat=5, Sun=6) and non-working days
         if current.weekday() < 5 and current not in non_working_dates:
