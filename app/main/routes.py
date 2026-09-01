@@ -962,9 +962,6 @@ def _auto_actuals(year, quarter):
     Uses fiscal year quarters (Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec, Q4=Jan-Mar)."""
     start, end = fiscal_year_date_range(year, quarter)
 
-    # Pre-fetch non-working days for the whole quarter once to avoid N+1 queries.
-    non_working = fetch_non_working_days(start, end)
-
     def _base(branch_filter):
         q = Sample.query.filter(
             Sample.date_registered >= start,
