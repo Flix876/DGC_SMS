@@ -201,6 +201,35 @@ def test_kpi_auto_actuals_tat_uses_date_registered(app):
         assert actuals['avg_days_pharma_coa'] == 1.0
 
 
+def test_kpi_auto_actuals_tat_uses_full_sample_date_range(app):
+    """Auto KPI TAT should include holidays after quarter end when needed."""
+    from app.main.routes import _auto_actuals
+    with app.app_context():
+        admin = _create_user(Role.ADMIN, username='admin_tat_range')
+        sample = Sample(
+            lab_number='PH-TAT-RANGE-001',
+            sample_name='TAT Range Check',
+            sample_type=Branch.PHARMACEUTICAL,
+            date_received=date(2026, 6, 30),
+            date_registered=datetime(2026, 6, 30, tzinfo=timezone.utc),
+            certified_at=datetime(2026, 7, 3, tzinfo=timezone.utc),
+            uploaded_by=admin.id,
+            status=SampleStatus.CERTIFIED,
+        )
+        holiday = NonWorkingDay(
+            date=date(2026, 7, 1),
+            description='Cross-quarter holiday',
+            day_type='holiday',
+            created_by=admin.id,
+        )
+        db.session.add(sample)
+        db.session.add(holiday)
+        db.session.commit()
+
+        actuals = _auto_actuals(2026, 1)
+        assert actuals['avg_days_pharma_coa'] == 2.0
+
+
 # ---------------------------------------------------------------------------
 # Pharmaceutical Report
 # ---------------------------------------------------------------------------
@@ -299,6 +328,38 @@ def test_pharma_report_download_tat_uses_full_sample_date_range(app, client):
     rows = list(csv.reader(resp.data.decode('utf-8').splitlines()))
     row = next(r for r in rows if r and r[0] == 'PH-HOL-001')
     assert row[10] == '4'
+
+
+def test_pharma_report_tat_uses_full_sample_date_range(app, client):
+    """On-screen TAT should include holidays across the full measured interval."""
+    _setup_admin(app)
+    with app.app_context():
+        admin = User.query.filter_by(username='admin').first()
+        sample = Sample(
+            lab_number='PH-HOL-002',
+            sample_name='Range Holiday Report',
+            sample_type=Branch.PHARMACEUTICAL,
+            date_received=date(2026, 3, 28),
+            date_registered=datetime(2026, 3, 28, tzinfo=timezone.utc),
+            certified_at=datetime(2026, 4, 3, tzinfo=timezone.utc),
+            uploaded_by=admin.id,
+            status=SampleStatus.CERTIFIED,
+        )
+        holiday = NonWorkingDay(
+            date=date(2026, 3, 31),
+            description='Report range holiday',
+            day_type='holiday',
+            created_by=admin.id,
+        )
+        db.session.add(sample)
+        db.session.add(holiday)
+        db.session.commit()
+
+    _login(client, 'admin')
+    resp = client.get('/reports/pharma?year=2026&quarter=1')
+    assert resp.status_code == 200
+    assert b'PH-HOL-002' in resp.data
+    assert b'<span class="badge bg-info text-dark">4</span>' in resp.data
 
 
 def test_pharma_report_filter_formulation_api_source(app, client):
@@ -533,6 +594,38 @@ def test_toxicology_report_filter_hospital_sample_type_patient_name(app, client)
     assert resp.status_code == 200
     assert b'TOX-FLT01' in resp.data
     assert b'TOX-FLT02' not in resp.data
+
+
+def test_kpi_toxicology_tat_uses_full_sample_date_range(app, client):
+    """Toxicology KPI TAT should include holidays after quarter end when needed."""
+    _setup_admin(app)
+    with app.app_context():
+        admin = User.query.filter_by(username='admin').first()
+        sample = Sample(
+            lab_number='TOX-TAT-001',
+            sample_name='Toxicology Range Check',
+            sample_type=Branch.TOXICOLOGY,
+            date_received=date(2026, 6, 30),
+            date_registered=datetime(2026, 6, 30, tzinfo=timezone.utc),
+            certified_at=datetime(2026, 7, 3, tzinfo=timezone.utc),
+            uploaded_by=admin.id,
+            status=SampleStatus.CERTIFIED,
+        )
+        holiday = NonWorkingDay(
+            date=date(2026, 7, 1),
+            description='Toxicology range holiday',
+            day_type='holiday',
+            created_by=admin.id,
+        )
+        db.session.add(sample)
+        db.session.add(holiday)
+        db.session.commit()
+
+    _login(client, 'admin')
+    resp = client.get('/kpi/toxicology?year=2026')
+    assert resp.status_code == 200
+    assert b'Q1 (Apr-Jun)' in resp.data
+    assert b'<td class="text-end">2.0</td>' in resp.data
 
 
 # ---------------------------------------------------------------------------

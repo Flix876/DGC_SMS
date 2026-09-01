@@ -108,6 +108,29 @@ def _any_keyword_in_text(keywords, combined):
     return any(kw in combined for kw in keywords)
 
 
+def _prefetch_tat_non_working_days(samples):
+    """Return non-working dates across the full TAT span of *samples*."""
+    tat_ranges = [
+        (
+            s.date_registered.date()
+            if isinstance(s.date_registered, datetime)
+            else s.date_registered,
+            s.certified_at.date()
+            if isinstance(s.certified_at, datetime)
+            else s.certified_at,
+        )
+        for s in samples
+        if s.certified_at and s.date_registered
+    ]
+    return (
+        fetch_non_working_days(
+            min(r[0] for r in tat_ranges),
+            max(r[1] for r in tat_ranges),
+        )
+        if tat_ranges else set()
+    )
+
+
 
 def _get_default_resubmission_types():
     """Return the default resubmission type filter list from settings.
@@ -966,6 +989,7 @@ def _auto_actuals(year, quarter):
         if alcohol_type_filter is not None:
             q = q.filter(Sample.alcohol_type == alcohol_type_filter)
         samples = q.all()
+        non_working = _prefetch_tat_non_working_days(samples)
         days = [
             calculate_working_days(s.date_registered, s.certified_at, non_working)
             for s in samples
@@ -1437,8 +1461,7 @@ def pharma_report():
     )
     rejected = sum(1 for s in samples if s.status == SampleStatus.REJECTED)
 
-    fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter else None)
-    non_working = fetch_non_working_days(fy_start, fy_end)
+    non_working = _prefetch_tat_non_working_days(samples)
 
     # Per-sample TAT (Feature 2)
     sample_tat = {}
@@ -2264,7 +2287,7 @@ def kpi_toxicology():
             Sample.certified_at.isnot(None),
         ).all()
         if cert_samples:
-            non_working = fetch_non_working_days(start, end)
+            non_working = _prefetch_tat_non_working_days(cert_samples)
             days_list = [
                 calculate_working_days(s.date_registered, s.certified_at, non_working)
                 for s in cert_samples
